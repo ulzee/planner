@@ -1,0 +1,7 @@
+.git
+external
+*.json
+**checkpoints
+**__pycache__
+**results
+**logs
