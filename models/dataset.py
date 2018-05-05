@@ -39,3 +39,100 @@ class Dataset:
 
 		actions = np.array(actions).reshape((batch_size, 1)) / 2.0 # range of actions is 0, 1, 2
 		return ins, actions, outs
+
+def not_color(pix, tol=0.01):
+	return abs(pix[0] - pix[1]) < tol and abs(pix[1] - pix[2]) < tol and abs(pix[0] - pix[2]) < tol
+
+def is_color(pix, palette, tol=0.01):
+	for ppp in palette:
+		if abs(pix[0] -  ppp[0] / 255) < tol and abs(pix[1] -  ppp[1] / 255) < tol and abs(pix[2] - ppp[2] / 255) < tol:
+			return True
+	return False
+
+def pad_edges(img, pad=2):
+	img[:pad, :] = 170 / 255
+	img[-pad:, :] = 170 / 255
+	return img
+
+def locate_player(img, template='chicken.npy'):
+	tmpl = np.load(template)
+	pshape = tmpl.shape
+
+	xpos = 35
+	minval = 10000000
+	miny = -1
+	for yy in range(len(img) - pshape[0]):
+		patch = img[yy:yy+pshape[0], xpos:xpos+pshape[1], :]
+		diff = 0
+		for jj in range(pshape[0]):
+			for ii in range(pshape[1]):
+				if not_color(tmpl[jj, ii]):
+					continue
+				else:
+					diff += np.sum(np.abs(tmpl[jj, ii] - patch[jj, ii]))
+
+		if diff < minval:
+			minval = diff
+			miny = yy
+		# print(diff, miny)
+	return miny, xpos
+
+if __name__ == '__main__':
+	import matplotlib.pyplot as plt
+
+	dset = Dataset()
+
+	ins, _, _ = dset.next_batch(1)
+	frame = ins[0]
+
+	# print(np.max(frame))
+
+	changed = frame.copy()
+	color_mask = []
+	for row in changed:
+		row_mask = []
+		for pix in row:
+			if not_color(pix):
+				row_mask.append([False]*3)
+			elif is_color(pix, [[252, 252, 84]]):
+				row_mask.append([False]*3)
+			else:
+				row_mask.append([True]*3)
+		color_mask.append(row_mask)
+	color_mask = np.array(color_mask, dtype=np.bool)
+	changed[color_mask] = 240 / 255
+
+	changed = pad_edges(changed)
+	player = changed[173:183, 99:107, 0] > 0.7
+	pshape = player.shape
+
+	tmpl = np.zeros((pshape[0], pshape[1], 3))
+	for yy, row in enumerate(player):
+		for xx, pix in enumerate(row):
+			if player[yy, xx]:
+				tmpl[yy, xx] = [1, 1, 0]
+
+	# plt.figure(figsize=(8, 8))
+	# plt.imshow(tmpl)
+	# plt.show()
+	# np.save('chicken.npy', tmpl)
+
+
+	# plt.figure(figsize=(16, 8))
+	# plt.subplot(1, 3, 1)
+	# plt.imshow(frame)
+	# plt.subplot(1, 3, 2)
+	# plt.imshow(color_mask.astype(np.float32))
+	# plt.subplot(1, 3, 3)
+	# plt.imshow(changed)
+	# plt.show()
+
+	py, px = locate_player(changed)
+	# plt.figure(figsize=(14, 10))
+	# plt.subplot(1, 2, 1)
+	# plt.imshow(changed[:, 35:43, :])
+	# plt.subplot(1, 2, 2)
+	# plt.imshow(changed[py:py+10, px:px+10, :])
+	# plt.show()
+
+
