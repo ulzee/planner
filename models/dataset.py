@@ -1,19 +1,59 @@
 
 import numpy as np
-from random import shuffle
+from random import shuffle, randint
 import h5py
+import json
 
 class Dataset:
 	def __init__(self):
 		self.dbhandle = h5py.File('/media/ul1994/ssd1tb/freeway/frames.h5', 'r')
 		self.prepare_data()
+		self.tmpl = np.load('chicken.npy')
+
 
 	def prepare_data(self):
 		self.inds = [ii for ii in range(len(self.dbhandle['frames']) - 1) if (ii+1) % 64 != 0 and ii % 64 > 4]
 		shuffle(self.inds)
 
+	start_inds = None
+	def sample_one(self, ind=None):
+		if self.start_inds is None:
+			with open('start_inds.json') as fl:
+				self.start_inds = json.load(fl)
+			with open('last_inds.json') as fl:
+				self.last_inds = json.load(fl)
+			# self.last_inds = []
+			# self.start_inds = []
+			# for ii in range(len(self.dbhandle['frames'])):
+			# print()
+			# import matplotlib.pyplot as plt
+			# for ii in range(len(self.dbhandle['frames'])):
+			# # for ii in range(10000):
+			# 	sized = resize_data(self.dbhandle['frames'][ii])
+			# 	# if is_first(sized, self.tmpl):
+			# 	# 	self.start_inds.append(ii)
+			# 		# plt.figure()
+			# 		# plt.imshow(sized)
+			# 		# plt.show()
+			# 	if is_last(sized, self.tmpl):
+			# 		self.last_inds.append(ii)
+
+			# with open('last_inds.json', 'w') as fl:
+			# 	json.dump(self.last_inds, fl)
+			# assert False
+		if ind is not None:
+			if ind == -1:
+				randind = randint(0, len(self.last_inds) - 1)
+				frame = self.dbhandle['frames'][self.last_inds[randind]]
+				return decolorize(resize_data(frame))
+			else:
+				randind = randint(0, len(self.start_inds) - 1)
+				frame = self.dbhandle['frames'][self.start_inds[randind] + ind]
+				return decolorize(resize_data(frame))
+		else:
+			raise Exception('???')
+
 	def next_batch(self, batch_size):
-		global inds
 		ins = []
 		actions = []
 		outs = []
@@ -23,11 +63,6 @@ class Dataset:
 
 		if len(self.inds) < batch_size:
 			self.prepare_data()
-
-		def resize_data(img):
-			canvas = img[13:13+184, 8:, :]
-			typed = canvas.astype(np.float32) / 255.0
-			return typed
 
 		for ii in binds:
 			before = (resize_data(self.dbhandle['frames'][ii]))
@@ -44,6 +79,11 @@ class Dataset:
 		actions = np.array(actions)
 		return ins, actions, outs
 
+def resize_data(img):
+	canvas = img[13:13+184, 8:, :]
+	typed = canvas.astype(np.float32) / 255.0
+	return typed
+
 def not_color(pix, tol=0.01):
 	return abs(pix[0] - pix[1]) < tol and abs(pix[1] - pix[2]) < tol and abs(pix[0] - pix[2]) < tol
 
@@ -58,28 +98,55 @@ def pad_edges(img, pad=2):
 	img[-pad:, :] = 170 / 255
 	return img
 
-def locate_player(img, template='chicken.npy'):
-	tmpl = np.load(template)
+import time
+import numpy.linalg as la
+def locate_player(img, tmpl):
 	pshape = tmpl.shape
 
 	xpos = 35
 	minval = 10000000
 	miny = -1
+	is_black = tmpl[:, :, 0] == 0
 	for yy in range(len(img) - pshape[0]):
-		patch = img[yy:yy+pshape[0], xpos:xpos+pshape[1], :]
-		diff = 0
-		for jj in range(pshape[0]):
-			for ii in range(pshape[1]):
-				if not_color(tmpl[jj, ii]):
-					continue
-				else:
-					diff += np.sum(np.abs(tmpl[jj, ii] - patch[jj, ii]))
+		patch = img[yy:yy+pshape[0], xpos:xpos+pshape[1], :].copy()
+		patch[is_black] = 0
+		diff = la.norm(tmpl - patch)
 
 		if diff < minval:
 			minval = diff
 			miny = yy
-		# print(diff, miny)
 	return miny, xpos
+
+def is_first(img, tmpl, tol=3.0):
+	pshape = tmpl.shape
+
+	xpos = 35
+	minval = 10000000
+	is_black = tmpl[:, :, 0] == 0
+	endat = len(img) - pshape[0]
+	for yy in range(endat - 3, len(img) - pshape[0]):
+		patch = img[yy:yy+pshape[0], xpos:xpos+pshape[1], :].copy()
+		patch[is_black] = 0
+		diff = la.norm(tmpl - patch)
+
+		if diff < minval:
+			minval = diff
+	return minval < tol
+
+def is_last(img, tmpl, tol=3.0):
+	pshape = tmpl.shape
+
+	xpos = 35
+	minval = 10000000
+	is_black = tmpl[:, :, 0] == 0
+	for yy in range(4, 8):
+		patch = img[yy:yy+pshape[0], xpos:xpos+pshape[1], :].copy()
+		patch[is_black] = 0
+		diff = la.norm(tmpl - patch)
+
+		if diff < minval:
+			minval = diff
+	return minval < tol
 
 def decolorize(frame, nullcolor=240/255):
 	changed = frame.copy()
@@ -154,22 +221,30 @@ if __name__ == '__main__':
 	# np.save('chicken.npy', tmpl)
 
 
-	plt.figure(figsize=(16, 8))
-	plt.subplot(1, 3, 1)
-	plt.imshow(frame)
-	# plt.subplot(1, 3, 2)
-	# plt.imshow(color_mask.astype(np.float32))
-	plt.subplot(1, 3, 3)
-	plt.imshow(changed)
-	plt.show()
-	assert False
-
-	py, px = locate_player(changed)
-	# plt.figure(figsize=(14, 10))
-	# plt.subplot(1, 2, 1)
-	# plt.imshow(changed[:, 35:43, :])
-	# plt.subplot(1, 2, 2)
-	# plt.imshow(changed[py:py+10, px:px+10, :])
+	# plt.figure(figsize=(16, 8))
+	# plt.subplot(1, 3, 1)
+	# plt.imshow(frame)
+	# # plt.subplot(1, 3, 2)
+	# # plt.imshow(color_mask.astype(np.float32))
+	# plt.subplot(1, 3, 3)
+	# plt.imshow(changed)
 	# plt.show()
+	# assert False
+
+	tmpl = np.load('chicken.npy')
+	t0 = time.time()
+	py, px = locate_player(changed, tmpl)
+	print(time.time() - t0)
+	t0 = time.time()
+	first = is_first(changed, tmpl)
+	print('first', first, time.time() - t0)
+	plt.figure(figsize=(14, 10))
+	plt.subplot(1, 3, 1)
+	plt.imshow(changed[:, 35:43, :])
+	plt.subplot(1, 3, 2)
+	plt.imshow(changed[py:py+10, px:px+10, :])
+	plt.subplot(1, 3, 3)
+	plt.imshow(tmpl)
+	plt.show()
 
 
