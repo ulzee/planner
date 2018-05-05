@@ -37,9 +37,11 @@ class Dataset:
 			# diff = after - before
 			ins.append(before)
 			outs.append(after)
-			actions.append(self.dbhandle['actions'][ii])
+			onehot = [0, 0, 0]
+			onehot[self.dbhandle['actions'][ii]] = 1
+			actions.append(onehot)
 
-		actions = np.array(actions).reshape((batch_size, 1)) / 2.0 # range of actions is 0, 1, 2
+		actions = np.array(actions)
 		return ins, actions, outs
 
 def not_color(pix, tol=0.01):

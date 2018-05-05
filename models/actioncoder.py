@@ -61,7 +61,7 @@ if __name__ == '__main__':
 
 	input_frame = tf.placeholder(shape=[None, 184, 152, 3], dtype=tf.float32)
 	output_frame = tf.placeholder(shape=[None, 184, 152, 3], dtype=tf.float32)
-	action_input = tf.placeholder(shape=[None, 1], dtype=tf.float32)
+	action_input = tf.placeholder(shape=[None, 3], dtype=tf.float32)
 
 	model = ActionCoder(input_frame, action_input, output_frame)
 	loss = model.loss
