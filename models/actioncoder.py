@@ -101,7 +101,7 @@ if __name__ == '__main__':
 		loss_out, _, summary = sess.run([loss, train, merged], feed_dict=feed_dict)
 		train_writer.add_summary(summary, ii)
 
-		sys.stdout.write('[%d/%d] L:%.2f\r ' % (ii+1, steps, loss_out))
+		sys.stdout.write('[%d/%d] L:%.2f\n ' % (ii+1, steps, loss_out))
 		sys.stdout.flush()
 
 		if ii % 100 == 0 and ii != 0:

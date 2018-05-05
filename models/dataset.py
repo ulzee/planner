@@ -5,7 +5,7 @@ import h5py
 
 class Dataset:
 	def __init__(self):
-		self.dbhandle = h5py.File('/media/ul1994/ssd1tb/freeway/frames.h5', 'r')
+		self.dbhandle = h5py.File('/beegfs/ua349/freeway/frames.h5', 'r')
 		self.prepare_data()
 
 	def prepare_data(self):
