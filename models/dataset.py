@@ -30,8 +30,10 @@ class Dataset:
 			return typed
 
 		for ii in binds:
-			before = resize_data(self.dbhandle['frames'][ii])
-			after = resize_data(self.dbhandle['frames'][ii+1])
+			before = (resize_data(self.dbhandle['frames'][ii]))
+			after = (resize_data(self.dbhandle['frames'][ii+1]))
+			before = decolorize(before)
+			after = decolorize(after)
 			# diff = after - before
 			ins.append(before)
 			outs.append(after)
@@ -77,6 +79,22 @@ def locate_player(img, template='chicken.npy'):
 		# print(diff, miny)
 	return miny, xpos
 
+def decolorize(frame, nullcolor=240/255):
+	changed = frame.copy()
+	is_color = np.logical_and(changed != 142/255, changed != 170/255)[:, :, 0]
+
+	is_red = changed[:, :, 0] == 252/255
+	is_green = changed[:, :, 1] == 252/255
+	is_y3 = changed[:, :, 2] == 84/255
+	is_yellow = np.logical_and(np.logical_and(is_red, is_green), is_y3)
+
+	not_chicken = np.logical_and(np.logical_not(is_yellow), is_color)
+	changed[not_chicken] = nullcolor
+
+	changed = pad_edges(changed)
+	return changed
+
+
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
 
@@ -88,29 +106,45 @@ if __name__ == '__main__':
 	# print(np.max(frame))
 
 	changed = frame.copy()
-	color_mask = []
-	for row in changed:
-		row_mask = []
-		for pix in row:
-			if not_color(pix):
-				row_mask.append([False]*3)
-			elif is_color(pix, [[252, 252, 84]]):
-				row_mask.append([False]*3)
-			else:
-				row_mask.append([True]*3)
-		color_mask.append(row_mask)
-	color_mask = np.array(color_mask, dtype=np.bool)
-	changed[color_mask] = 240 / 255
+	import time
+	t0 = time.time()
+
+	nullcolor = 240 / 255
+	is_color = np.logical_and(changed != 142/255, changed != 170/255)[:, :, 0]
+	# is_color = (changed != 142/255)[:, :, 0]
+	is_red = changed[:, :, 0] == 252/255
+	is_green = changed[:, :, 1] == 252/255
+	is_y3 = changed[:, :, 2] == 84/255
+	is_yellow = np.logical_and(np.logical_and(is_red, is_green), is_y3)
+	# print(is_yellow.shape)
+
+	not_chicken = np.logical_and(np.logical_not(is_yellow), is_color)
+	changed[not_chicken] = nullcolor
+	# color_mask = []
+	# for row in changed:
+	# 	row_mask = []
+	# 	for pix in row:
+	# 		if not_color(pix):
+	# 			row_mask.append([False]*3)
+	# 		elif is_color(pix, [[252, 252, 84]]):
+	# 			row_mask.append([False]*3)
+	# 		else:
+	# 			row_mask.append([True]*3)
+	# 	color_mask.append(row_mask)
+	# print(time.time() - t0)
+	# color_mask = np.array(color_mask, dtype=np.bool)
+	# changed[color_mask] = 240 / 255
 
 	changed = pad_edges(changed)
-	player = changed[173:183, 99:107, 0] > 0.7
-	pshape = player.shape
+	print(time.time() - t0)
+	# player = changed[173:183, 99:107, 0] > 0.7
+	# pshape = player.shape
 
-	tmpl = np.zeros((pshape[0], pshape[1], 3))
-	for yy, row in enumerate(player):
-		for xx, pix in enumerate(row):
-			if player[yy, xx]:
-				tmpl[yy, xx] = [1, 1, 0]
+	# tmpl = np.zeros((pshape[0], pshape[1], 3))
+	# for yy, row in enumerate(player):
+	# 	for xx, pix in enumerate(row):
+	# 		if player[yy, xx]:
+	# 			tmpl[yy, xx] = [1, 1, 0]
 
 	# plt.figure(figsize=(8, 8))
 	# plt.imshow(tmpl)
@@ -118,14 +152,15 @@ if __name__ == '__main__':
 	# np.save('chicken.npy', tmpl)
 
 
-	# plt.figure(figsize=(16, 8))
-	# plt.subplot(1, 3, 1)
-	# plt.imshow(frame)
+	plt.figure(figsize=(16, 8))
+	plt.subplot(1, 3, 1)
+	plt.imshow(frame)
 	# plt.subplot(1, 3, 2)
 	# plt.imshow(color_mask.astype(np.float32))
-	# plt.subplot(1, 3, 3)
-	# plt.imshow(changed)
-	# plt.show()
+	plt.subplot(1, 3, 3)
+	plt.imshow(changed)
+	plt.show()
+	assert False
 
 	py, px = locate_player(changed)
 	# plt.figure(figsize=(14, 10))
