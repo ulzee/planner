@@ -15,7 +15,8 @@ class ActionCoder(Encoder):
 		print(' [*] latent-in:', __shaped_zin.get_shape())
 
 
-		self.z = tf.nn.relu(tf.layers.dense(inputs=action_added, units=4096))
+		self.inner_z = tf.layers.dense(inputs=action_added, units=1024)
+		self.z = tf.nn.relu(self.inner_z)
 		print(' [*] latent:', self.z.get_shape())
 
 		zout = tf.nn.relu(tf.layers.dense(inputs=self.z, units=flat_size))
@@ -24,7 +25,7 @@ class ActionCoder(Encoder):
 		print(' [*] latent-out:', shaped_zout.get_shape())
 		return carry
 
-	def __init__(self, images, actions, targets, conv_stack=2, filter_size=3):
+	def __init__(self, images, actions, targets=None, conv_stack=2, filter_size=3, is_eval=False):
 		self.images = images
 		self.targets = targets
 		self.actions = actions
@@ -36,6 +37,7 @@ class ActionCoder(Encoder):
 
 		carry = self.latent_block(carry, self.actions, bsize)
 
+		# if not latent_only:
 		carry = self.decoder_block(carry, bsize, encoder_spec, conv_stack=conv_stack)
 
 		self.guess = tf.nn.sigmoid(carry)
@@ -43,10 +45,23 @@ class ActionCoder(Encoder):
 		print(self.guess.get_shape())
 
 		# bsize = tf.shape(self.images)[:3]
-		with tf.variable_scope('Reconst-Loss'):
-			loss = tf.nn.l2_loss(self.guess - targets) / tf.cast(bsize, tf.float32)
+		if not is_eval:
+			with tf.variable_scope('Reconst-Loss'):
+				loss = tf.nn.l2_loss(self.guess - targets) / tf.cast(bsize, tf.float32)
 
-		self.loss = loss
+			self.loss = loss
+
+def unroll_actions(sess, coder, first_images, guessed_actions, stack_size):
+	latents = []
+	spatials = []
+	carry_images = first_images
+	for ii in range(stack_size - 1):
+	# for ii in range(1):
+		din = {coder.actions: guessed_actions[:, ii, :], coder.images: carry_images}
+		lats, carry_images = sess.run([coder.inner_z, coder.guess], feed_dict=din)
+		latents.append(lats)
+		spatials.append(carry_images)
+	return latents, spatials
 
 if __name__ == '__main__':
 	import sys, os
