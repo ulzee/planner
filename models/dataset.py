@@ -16,7 +16,7 @@ class Dataset:
 		shuffle(self.inds)
 
 	start_inds = None
-	def sample_one(self, ind=None):
+	def sample_one(self, bsize, ind=None):
 		if self.start_inds is None:
 			with open('start_inds.json') as fl:
 				self.start_inds = json.load(fl)
@@ -42,14 +42,18 @@ class Dataset:
 			# 	json.dump(self.last_inds, fl)
 			# assert False
 		if ind is not None:
+			images = []
 			if ind == -1:
-				randind = randint(0, len(self.last_inds) - 1)
-				frame = self.dbhandle['frames'][self.last_inds[randind]]
-				return decolorize(resize_data(frame))
+				for ii in range(bsize):
+					randind = randint(0, len(self.last_inds) - 1)
+					frame = self.dbhandle['frames'][self.last_inds[randind]]
+					images.append(decolorize(resize_data(frame)))
 			else:
-				randind = randint(0, len(self.start_inds) - 1)
-				frame = self.dbhandle['frames'][self.start_inds[randind] + ind]
-				return decolorize(resize_data(frame))
+				for ii in range(bsize):
+					randind = randint(0, len(self.start_inds) - 1)
+					frame = self.dbhandle['frames'][self.start_inds[randind] + ind]
+					images.append(decolorize(resize_data(frame)))
+			return images
 		else:
 			raise Exception('???')
 
