@@ -163,7 +163,7 @@ if __name__ == '__main__':
 	from actioncoder import unroll_actions, ActionCoder
 	import sys
 
-	BATCH_SIZE = 64
+	BATCH_SIZE = 32
 	P_DIM = 100
 	STACK_SIZE = 20
 	LATENT_SIZE = 1024
@@ -175,26 +175,39 @@ if __name__ == '__main__':
 		tf.placeholder(shape=[None, 184, 152, 3], dtype=tf.float32),
 		tf.placeholder(shape=[None, 3], dtype=tf.float32),
 		is_eval=True)
-	# tf.train.Saver().restore(sess, './results/actioncoder_simple/model-latest')
+	coder_vars = tf.trainable_variables()
 
 	model = Imitator(latent_dim=LATENT_SIZE, p_dim=P_DIM, stack=STACK_SIZE)
 
-	train_real = tf.train.AdamOptimizer(0.00001, epsilon=1e-8) \
+	train_real = tf.train.AdamOptimizer(0.001, epsilon=1e-8) \
 		.minimize(model.discrim_real, global_step=tf.train.get_global_step())
-	train_fake = tf.train.AdamOptimizer(0.00001, epsilon=1e-8) \
+	train_fake = tf.train.AdamOptimizer(0.001, epsilon=1e-8) \
 		.minimize(model.discrim_fake, global_step=tf.train.get_global_step())
 
-	merged = tf.summary.merge_all()
+	srl = tf.summary.scalar('real_loss', model.discrim_real)
+	sfl = tf.summary.scalar('fake_loss', model.discrim_fake)
+
+	# merged = tf.summary.merge_all()
 	train_writer = tf.summary.FileWriter('logs/imitator/train', graph=sess.graph)
 	sess.run(tf.global_variables_initializer())
+	tf.train.Saver(coder_vars).restore(sess, 'results/actioncoder_small/model-latest')
+
+	# values = sess.run(variables_names)
+	# for k, v in zip(variables_names, values):
+	# 	print("Variable: ", k)
+	# 	print("Shape: ", v.shape)
+	# 	# print(v)
+	# assert False
 
 	steps = 1000000
 	for eii in range(steps):
 
 		# Generate imagined plans
+		loss_fake = 0.0
 		frame0 = dset.sample_one(BATCH_SIZE, ind=1)
 
-		latent0 = np.zeros((BATCH_SIZE, 1, LATENT_SIZE))
+		latent0 = sess.run(coder.inner_z, feed_dict={coder.images:frame0, coder.actions:np.zeros((BATCH_SIZE, 3))})
+		latent0 = latent0.reshape((BATCH_SIZE, 1, LATENT_SIZE))
 		known0 = np.zeros((BATCH_SIZE, 1, 1))
 		batch_p = np.random.uniform(-1, 1, [BATCH_SIZE, P_DIM]).astype(np.float32)
 
@@ -215,11 +228,6 @@ if __name__ == '__main__':
 		# in_stack = { **in_stack, **in0 }
 		filtered_actions = sess.run(model.next_actions_onehot, feed_dict=in_stack)
 
-		# Fetch latents real sequences
-		# TODO:
-
-		real_actions = np.zeros(guessed_actions.shape)
-		real_latents = np.zeros(latents.shape)
 
 		# Discriminiate between real and fake plans
 		fake_label = np.zeros((BATCH_SIZE, 2))
@@ -228,16 +236,27 @@ if __name__ == '__main__':
 		fake_dict = {**in_stack, **fake_dict}
 		loss_fake = sess.run(model.discrim_fake, feed_dict=fake_dict)
 
+		real_frames, real_actions = dset.sample_sequence(BATCH_SIZE, stack=20)
+
+		real_latents = []
+		for bb in range(BATCH_SIZE):
+			lout = sess.run(
+				coder.inner_z,
+				feed_dict={coder.images:real_frames[bb], coder.actions:real_actions[bb]})
+			real_latents.append(lout)
+		real_latents = np.array(real_latents)
 		real_label = np.zeros((BATCH_SIZE, 2))
 		real_label[:, 1] = 1
+		# print(real_actions[0])
 		real_dict = {
 			model.discrim_latents: real_latents,
 			model.real_actions: real_actions,
 			model.discrim_label:real_label
 		}
-		loss_real = sess.run(model.discrim_real, feed_dict=real_dict)
+		loss_real, summ = sess.run([model.discrim_real, tf.summary.merge([srl])], feed_dict=real_dict)
+		train_writer.add_summary(summ, eii)
 
-		sys.stdout.write('[%d/%d] LF:%.2f  LR:%.2f\r ' % (eii+1, steps, loss_fake, loss_real))
+		sys.stdout.write('[%d/%d] LF:%.4f  LR:%.4f\r ' % (eii+1, steps, loss_fake, loss_real))
 		sys.stdout.flush()
 
 		# if ii % 100 == 0 and ii != 0:

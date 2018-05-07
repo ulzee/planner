@@ -3,7 +3,10 @@ import tensorflow as tf
 import numpy as np
 import math
 import os, sys
-from encoder import Encoder
+try:
+	from .encoder import Encoder
+except:
+	from encoder import Encoder
 
 class ActionCoder(Encoder):
 

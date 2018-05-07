@@ -57,6 +57,39 @@ class Dataset:
 		else:
 			raise Exception('???')
 
+	def sample_sequence(self, bsize, stack=20):
+		if self.start_inds is None:
+			raise Exception('call sample one first...')
+		all_frames = []
+		all_actions = []
+		for ii in range(bsize):
+			randind = randint(0, len(self.start_inds) - 1)
+			st = self.start_inds[randind]
+			ed = st + stack
+			ended = False
+			lastind = None
+			frames = []
+			actions = []
+			for tt in range(st, ed):
+				if tt in self.last_inds:
+					ended = True
+					lastind = tt
+					frame = self.dbhandle['frames'][tt]
+					action = 0
+				elif ended:
+					frame = self.dbhandle['frames'][lastind]
+					action = 0
+				else:
+					frame = self.dbhandle['frames'][tt]
+					action = self.dbhandle['actions'][tt]
+				frames.append(decolorize(resize_data(frame)))
+				onehot = [0, 0, 0]
+				onehot[action] = 1
+				actions.append(onehot)
+			all_frames.append(frames)
+			all_actions.append(actions)
+		return np.array(all_frames), np.array(all_actions)
+
 	def next_batch(self, batch_size):
 		ins = []
 		actions = []
@@ -225,30 +258,30 @@ if __name__ == '__main__':
 	# np.save('chicken.npy', tmpl)
 
 
-	# plt.figure(figsize=(16, 8))
-	# plt.subplot(1, 3, 1)
-	# plt.imshow(frame)
-	# # plt.subplot(1, 3, 2)
-	# # plt.imshow(color_mask.astype(np.float32))
-	# plt.subplot(1, 3, 3)
-	# plt.imshow(changed)
-	# plt.show()
-	# assert False
-
-	tmpl = np.load('chicken.npy')
-	t0 = time.time()
-	py, px = locate_player(changed, tmpl)
-	print(time.time() - t0)
-	t0 = time.time()
-	first = is_first(changed, tmpl)
-	print('first', first, time.time() - t0)
-	plt.figure(figsize=(14, 10))
+	plt.figure(figsize=(16, 8))
 	plt.subplot(1, 3, 1)
-	plt.imshow(changed[:, 35:43, :])
+	plt.imshow(frame)
 	plt.subplot(1, 3, 2)
-	plt.imshow(changed[py:py+10, px:px+10, :])
+	plt.imshow(not_chicken.astype(np.float32))
 	plt.subplot(1, 3, 3)
-	plt.imshow(tmpl)
+	plt.imshow(changed)
 	plt.show()
+	assert False
+
+	# tmpl = np.load('chicken.npy')
+	# t0 = time.time()
+	# py, px = locate_player(changed, tmpl)
+	# print(time.time() - t0)
+	# t0 = time.time()
+	# first = is_first(changed, tmpl)
+	# print('first', first, time.time() - t0)
+	# plt.figure(figsize=(14, 10))
+	# plt.subplot(1, 3, 1)
+	# plt.imshow(changed[:, 35:43, :])
+	# plt.subplot(1, 3, 2)
+	# plt.imshow(changed[py:py+10, px:px+10, :])
+	# plt.subplot(1, 3, 3)
+	# plt.imshow(tmpl)
+	# plt.show()
 
 
